@@ -3,14 +3,12 @@ import torch.nn.functional as F
 import os
 import ijson
 from collections import OrderedDict
-import rpy2.robjects as robjects
-import rpy2.rinterface_lib.callbacks
-import logging
 import numpy as np
+from math import lgamma
 from sentence_splitter import SentenceSplitter
 from sinling import SinhalaTokenizer
-rpy2.rinterface_lib.callbacks.logger.setLevel(logging.ERROR)
 from faiss_search import faiss_L2_search, faiss_cos_search
+
 
 def count_files(folder_path):
     count = 0
@@ -130,27 +128,48 @@ def cal_LIDF(segments_list):
     
     return final_IDF_list
 
-def pert_windows(J, N, r):
-    r_function = """
-        library(mc2d)
-        my_function = function(x, a, b, c, r) {
-            prob = dpert(x, min = a, mode = b, max = c, shape = r, log = FALSE)
-            return(prob)
-        }
-    """
-    robjects.r(r_function)
-    result_list_tmp = []
-    result_list_final = []
-    for j in range(J):
-        mode = (j + 0.5)/J * N
-        for i in range(N):
-            result = robjects.r.my_function(i, -1, mode, N, r)[0]
-            result_list_tmp.append(result)
-        jth_result = [ item/sum(result_list_tmp) for item in result_list_tmp ]
-        result_list_final.append(jth_result)
-        result_list_tmp = []
-    return torch.tensor(result_list_final)
+def _beta_pdf_unit_interval(x, alpha, beta):
+    eps = 1e-8
+    x = np.clip(x, eps, 1.0 - eps)
 
+    log_norm = lgamma(alpha + beta) - lgamma(alpha) - lgamma(beta)
+    log_pdf = log_norm + (alpha - 1.0) * np.log(x) + (beta - 1.0) * np.log(1.0 - x)
+    return np.exp(log_pdf)
+
+
+def pert_windows(J, N, r):
+    if N <= 0:
+        raise ValueError("N must be > 0")
+    if J <= 0:
+        raise ValueError("J must be > 0")
+
+    if N == 1:
+        return torch.ones((J, 1), dtype=torch.float32)
+
+    result_list_final = []
+
+    a = -1.0
+    c = float(N)
+    xs = np.arange(N, dtype=np.float64)
+
+    for j in range(J):
+        b = (j + 0.5) / J * N
+
+        u = (xs - a) / (c - a)
+        alpha = 1.0 + r * (b - a) / (c - a)
+        beta = 1.0 + r * (c - b) / (c - a)
+
+        probs = _beta_pdf_unit_interval(u, alpha, beta)
+
+        probs_sum = probs.sum()
+        if probs_sum <= 0 or not np.isfinite(probs_sum):
+            probs = np.ones(N, dtype=np.float64) / N
+        else:
+            probs = probs / probs_sum
+
+        result_list_final.append(probs.tolist())
+
+    return torch.tensor(result_list_final, dtype=torch.float32)
 def load_data(emb_files_num, lang, split_method, embs_path):
     IDs = []
     values = []
@@ -246,3 +265,10 @@ def margin_score(embeddings_1, embeddings_2, num_neighbors):
     margin_score = cos_score / NN_score.cpu().numpy()
 
     return margin_score
+    
+def none_or_str(x):
+    if x is None:
+        return None
+    if isinstance(x, str) and x.lower() == "none":
+        return None
+    return x

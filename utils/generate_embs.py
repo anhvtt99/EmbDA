@@ -16,12 +16,14 @@ def main():
     parser.add_argument('--split_method', type=str, default='ofls', help='choose from [sbs (sentence-based segmentation), ofls (overlapping fixed-length segmentation)]')
     parser.add_argument('--chunk_size', type=int, default=2048, help='chunk size used to split document segments into batches for embedding')
     parser.add_argument('--lang', type=str, default='en', help='choose from en, si, ta')
-    parser.add_argument('--data_domain', type=str, default='Army', help='choose from Army, Hiru, ITN, Newsfirst')
+    parser.add_argument('--data_domain', type=none_or_str, default=None, help='choose from Army, Hiru, ITN, Newsfirst, or None')
     parser.add_argument('--data_path', type=str, default='../fernando_data', help='Path to data')
     parser.add_argument('--out_path', type=str, default='../embs', help='Path to output file')
     parser.add_argument('--J', type=int, default= 16, help='The numbers of PERT winodws')
     parser.add_argument('--shape', type=int, default= 16, help='Controls the weight of the most likely value in the determination of the mean for PERT distribution')
     parser.add_argument('--save_num', type=int, default= 500, help='Number of docs to save')
+    parser.add_argument('--input_format', type=str, default='json', choices=['json', 'txt'],
+                        help='Input file format: json or txt')
     args = parser.parse_args()
 
     if torch.cuda.is_available():
@@ -35,16 +37,31 @@ def main():
 
     'Load data'
     print(f"Begin reading the [{args.lang}] data...")
-    docs_path = f"{args.data_path}/{args.data_domain}/{args.lang}"
-    json_files = glob.glob(os.path.join(docs_path, "*.json"))
+    
+    if args.data_domain is None:
+        docs_path = os.path.join(args.data_path, args.lang)
+    else:
+        docs_path = os.path.join(args.data_path, args.data_domain, args.lang)
+    
     data_dict = {}
-    for file in json_files:
-        with open(file, "r", encoding="utf-8") as f:
-            data_dict[os.path.basename(file)] = json.load(f)
+    
+    if args.input_format == "json":
+        input_files = glob.glob(os.path.join(docs_path, "*.json"))
+        for file in input_files:
+            with open(file, "r", encoding="utf-8") as f:
+                data_dict[os.path.basename(file)] = json.load(f)
+    
+    elif args.input_format == "txt":
+        input_files = glob.glob(os.path.join(docs_path, "*.txt"))
+        for file in input_files:
+            with open(file, "r", encoding="utf-8") as f:
+                text = f.read().strip()
+            data_dict[os.path.basename(file)] = {"Content": text}
+    
     doc_num = len(data_dict)
     print(f"{doc_num} [{args.lang}] docs have been read...")
-
-    del json_files
+    
+    del input_files
 
     'load model'
     print("Use LaBSE model for embedding. Loading model...")
@@ -56,12 +73,24 @@ def main():
 
     'make output folds'
     if args.split_method == "sbs":
-        out_file_path = args.out_path + f'/{args.data_domain}/{args.lang}/sbs'
+        if args.data_domain is None:
+            out_file_path = os.path.join(args.out_path, args.lang, "sbs")
+        else:
+            out_file_path = os.path.join(args.out_path, args.data_domain, args.lang, "sbs")
+    
     elif args.split_method == "ofls":
         segment_len = args.seg_len
         overlap_rate = args.overlap
         overlap = int(segment_len * overlap_rate)
-        out_file_path = args.out_path + f'/{args.data_domain}/{args.lang}/ofls_fl{args.seg_len}_or{args.overlap}'
+    
+        if args.data_domain is None:
+            out_file_path = os.path.join(
+                args.out_path, args.lang, f"ofls_fl{args.seg_len}_or{args.overlap}"
+            )
+        else:
+            out_file_path = os.path.join(
+                args.out_path, args.data_domain, args.lang, f"ofls_fl{args.seg_len}_or{args.overlap}"
+            )
 
     if not os.path.exists(out_file_path):
         os.makedirs(out_file_path)  

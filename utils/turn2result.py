@@ -1,10 +1,11 @@
 import argparse 
 import re
+from utils import none_or_str
 
 def main():
     parser = argparse.ArgumentParser(description='Parameters')
 
-    parser.add_argument('--data_domain', type=str, default='Army', help='choose from Army, Hiru, ITN, Newsfirst')
+    parser.add_argument('--data_domain', type=none_or_str, default=None, help='choose from Army, Hiru, ITN, Newsfirst, or None')
     parser.add_argument('--da_method', type=str, default='mean', help='document alignment method,[mean, tkpert, [mean, tkpert]-[sl, sf]-[ot, gmd] (e.g., mean-sf-ot), [mean, tkpert]-bimax]')
     parser.add_argument('--sim_method', type=str, default='cos', help='choose from [cos, margin_score]')
     parser.add_argument('--lang_pair', type=str, default='en-si', help='choose from [en-si, en-ta, si-ta]')
@@ -26,8 +27,14 @@ def main():
     else:
         split_md = "sbs"
     
-
-    with open(args.out_path + f"/{domain}/{domain}_{lang_pair}_{split_md}.{retri}.{da_method}.txt", "r", encoding="utf-8") as f:
+    if domain is None:
+        input_file = f"{args.out_path}/{lang_pair}_{split_md}.{retri}.{da_method}.txt"
+        output_file = f"{args.out_path}/{lang_pair}_{split_md}.{retri}.{da_method}_result.txt"
+    else:
+        input_file = f"{args.out_path}/{domain}/{domain}_{lang_pair}_{split_md}.{retri}.{da_method}.txt"
+        output_file = f"{args.out_path}/{domain}/{domain}_{lang_pair}_{split_md}.{retri}.{da_method}_result.txt"
+    
+    with open(input_file, "r", encoding="utf-8") as f:
         for line in f:
             parts = [p.strip() for p in line.split("\t")] 
             if len(parts) >= 3:
@@ -41,7 +48,7 @@ def main():
                 output_tmp.append(f"{jsons[0]}\t{jsons[1]}")
         output_lines = output_tmp
 
-    with open(args.out_path + f"/{domain}/{domain}_{lang_pair}_{split_md}.{retri}.{da_method}_result.txt", "w", encoding="utf-8") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write("\n".join(output_lines))
 
     print("Have turned output file to result file!")

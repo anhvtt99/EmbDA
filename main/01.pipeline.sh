@@ -2,12 +2,12 @@
 
 EMBS_PATH=../embs
 OUT_PATH=../da_results
-DATA_PATH=../fernando_data
+DATA_PATH=../data
 
 mkdir -p $OUT_PATH
 
-SRC_LANG=en               # Source Language
-TGT_LANG=si               # Target Language
+SRC_LANG=vie               # Source Language
+TGT_LANG=han               # Target Language
 
 DA_METHOD=mean-bimax    
 # Document alignment method, choose from [mean, tkpert, mean-[sl, sf]-[ot, gmd] (e.g., mean-sf-ot), mean-bimax]
@@ -17,7 +17,7 @@ BIMAX_TYPE=loop            # Calculation type of BiMax, choose from [loop, batch
 
 SIM_METHOD=cos             # Retrieval strategy for "mean" or "tkpert", choose from [cos, margin]
 SPLIT_METHOD=ofls          # Segmentation method, choose from [ofls, sbs]
-DATA_DOMAIN=Army            # Data domain, choose from [Newsfirst, ITN, Army, Hiru]
+DATA_DOMAIN=None            # Data domain, choose from [Newsfirst, ITN, Army, Hiru]
 # If "ofls" has been chosen
 FL=30                      # Fixed-Length for OFLS
 OR=0.5                     # Overlapping Rate for OFLS
